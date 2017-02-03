@@ -82,7 +82,8 @@ static GstStaticPadTemplate video_src_template =
     GST_STATIC_CAPS ("video/x-flash-video, flvversion=(int) 1; "
         "video/x-flash-screen; "
         "video/x-vp6-flash; " "video/x-vp6-alpha; "
-        "video/x-h264, stream-format=avc;")
+        "video/x-h264, stream-format=avc; "
+        "video/x-h265, stream-format=avc;")
     );
 
 GST_DEBUG_CATEGORY_STATIC (flvdemux_debug);
@@ -1348,7 +1349,14 @@ gst_flv_demux_video_negotiate (GstFlvDemux * demux, guint32 codec_tag)
        * https://git.videolan.org/?p=ffmpeg.git;a=blob;f=libavformat/flvdec.c;h=2bf1e059e1cbeeb79e4af9542da23f4560e1cf59;hb=b18d6c58000beed872d6bb1fe7d0fbe75ae26aef#l282
        */
     case 8:
-      caps = gst_caps_new_empty_simple ("video/x-h263");
+      if (!demux->video_codec_data) {
+        GST_DEBUG_OBJECT (demux, "don't have h265 codec data yet");
+        ret = TRUE;
+        goto done;
+      }
+      caps =
+          gst_caps_new_simple ("video/x-h265", "stream-format", G_TYPE_STRING,
+          "avc", NULL);
       break;
     case 9:
       caps =
