@@ -82,7 +82,8 @@ static GstStaticPadTemplate video_src_template =
     GST_STATIC_CAPS ("video/x-flash-video, flvversion=(int) 1; "
         "video/x-flash-screen; "
         "video/x-vp6-flash; " "video/x-vp6-alpha; "
-        "video/x-h264, stream-format=avc;")
+        "video/x-h264, stream-format=avc; "
+        "video/x-h265, stream-format=hvc1;")
     );
 
 GST_DEBUG_CATEGORY_STATIC (flvdemux_debug);
@@ -1344,11 +1345,18 @@ gst_flv_demux_video_negotiate (GstFlvDemux * demux, guint32 codec_tag)
           "avc", NULL);
       break;
       /* The following two are non-standard but apparently used, see in ffmpeg
-       * https://git.videolan.org/?p=ffmpeg.git;a=blob;f=libavformat/flvdec.c;h=2bf1e059e1cbeeb79e4af9542da23f4560e1cf59;hb=b18d6c58000beed872d6bb1fe7d0fbe75ae26aef#l254
+       * https://git.videolan.org/?p=ffmpeg.git;a=blob;f=libavformat/flvdec.c;h=2bf1e059e1cbeeb79e4af9542da23f4560e1cf59;hb=b18d6c58000beed872d6bb1fe7d0fbe75ae26aef#l254 // ..now h265 instead of h263
        * https://git.videolan.org/?p=ffmpeg.git;a=blob;f=libavformat/flvdec.c;h=2bf1e059e1cbeeb79e4af9542da23f4560e1cf59;hb=b18d6c58000beed872d6bb1fe7d0fbe75ae26aef#l282
        */
     case 8:
-      caps = gst_caps_new_empty_simple ("video/x-h263");
+      if (!demux->video_codec_data) {
+        GST_DEBUG_OBJECT (demux, "don't have h265 codec data yet");
+        ret = TRUE;
+        goto done;
+      }
+      caps =
+          gst_caps_new_simple ("video/x-h265", "stream-format", G_TYPE_STRING,
+          "hvc1", NULL);
       break;
     case 9:
       caps =
@@ -1496,7 +1504,7 @@ gst_flv_demux_parse_tag_video (GstFlvDemux * demux, GstBuffer * buffer)
   codec_tag = flags & 0x0F;
   if (codec_tag == 4 || codec_tag == 5) {
     codec_data = 2;
-  } else if (codec_tag == 7) {
+  } else if (codec_tag == 7 || codec_tag == 8) {
     codec_data = 5;
 
     cts = GST_READ_UINT24_BE (data + 9);
@@ -1508,17 +1516,19 @@ gst_flv_demux_parse_tag_video (GstFlvDemux * demux, GstBuffer * buffer)
   GST_LOG_OBJECT (demux, "video tag with codec tag %u, keyframe (%d) "
       "(flags %02X)", codec_tag, keyframe, flags);
 
-  if (codec_tag == 7) {
+  if (codec_tag == 7 || codec_tag == 8) {
     guint8 avc_packet_type = GST_READ_UINT8 (data + 8);
-
+	GST_LOG_OBJECT (demux, "***avc_packet_type %d", avc_packet_type);
+	
     switch (avc_packet_type) {
       case 0:
       {
         /* AVCDecoderConfigurationRecord data */
-        GST_LOG_OBJECT (demux, "got an H.264 codec data packet");
+        GST_LOG_OBJECT (demux, "got an H.264/265 codec data packet");
         if (demux->video_codec_data) {
           gst_buffer_unref (demux->video_codec_data);
         }
+        GST_LOG_OBJECT (demux, "got a H.264 AVCDecoderConfigurationRecord / H.265 HEVCDecoderConfigurationRecord ");
         demux->video_codec_data = gst_buffer_copy_region (buffer,
             GST_BUFFER_COPY_MEMORY, 7 + codec_data,
             demux->tag_data_size - codec_data);;
@@ -1530,11 +1540,11 @@ gst_flv_demux_parse_tag_video (GstFlvDemux * demux, GstBuffer * buffer)
       case 1:
         /* H.264 NALU packet */
         if (!demux->video_codec_data) {
-          GST_ERROR_OBJECT (demux, "got H.264 video packet before codec data");
+          GST_ERROR_OBJECT (demux, "got H.264 / H.265 video packet before codec data");
           ret = GST_FLOW_OK;
           goto beach;
         }
-        GST_LOG_OBJECT (demux, "got a H.264 NALU video packet");
+        GST_LOG_OBJECT (demux, "got a H.264 / H.265 NALU video packet");
         break;
       default:
         GST_WARNING_OBJECT (demux, "invalid video packet type %u",

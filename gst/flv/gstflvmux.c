@@ -69,7 +69,8 @@ static GstStaticPadTemplate videosink_templ = GST_STATIC_PAD_TEMPLATE ("video",
     GST_STATIC_CAPS ("video/x-flash-video; "
         "video/x-flash-screen; "
         "video/x-vp6-flash; " "video/x-vp6-alpha; "
-        "video/x-h264, stream-format=avc;")
+        "video/x-h264, stream-format=avc; "
+        "video/x-h265, stream-format=hvc1;")
     );
 
 static GstStaticPadTemplate audiosink_templ = GST_STATIC_PAD_TEMPLATE ("audio",
@@ -388,6 +389,8 @@ gst_flv_mux_video_pad_setcaps (GstPad * pad, GstCaps * caps)
     cpad->video_codec = 5;
   } else if (strcmp (gst_structure_get_name (s), "video/x-h264") == 0) {
     cpad->video_codec = 7;
+  } else if (strcmp (gst_structure_get_name (s), "video/x-h265") == 0) {
+    cpad->video_codec = 8;
   } else {
     ret = FALSE;
   }
@@ -1088,7 +1091,7 @@ gst_flv_mux_buffer_to_tag_internal (GstFlvMux * mux, GstBuffer * buffer,
   size = 11;
   if (cpad->video) {
     size += 1;
-    if (cpad->video_codec == 7)
+    if (cpad->video_codec == 7 || cpad->video_codec == 8)
       size += 4 + bsize;
     else
       size += bsize;
@@ -1123,7 +1126,7 @@ gst_flv_mux_buffer_to_tag_internal (GstFlvMux * mux, GstBuffer * buffer,
 
     data[11] |= cpad->video_codec & 0x0f;
 
-    if (cpad->video_codec == 7) {
+    if (cpad->video_codec == 7 || cpad->video_codec == 8) {
       if (is_codec_data) {
         data[12] = 0;
         GST_WRITE_UINT24_BE (data + 13, 0);
@@ -1275,7 +1278,7 @@ gst_flv_mux_write_header (GstFlvMux * mux)
     GstFlvPad *cpad = l->data;
 
     /* Get H.264 and AAC codec data, if present */
-    if (cpad && cpad->video && cpad->video_codec == 7) {
+    if (cpad && cpad->video && (cpad->video_codec == 7 || cpad->video_codec == 8)) {
       if (cpad->video_codec_data == NULL)
         GST_WARNING_OBJECT (mux, "Codec data for video stream not found, "
             "output might not be playable");
