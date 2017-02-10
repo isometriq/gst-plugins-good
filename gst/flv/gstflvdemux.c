@@ -83,7 +83,7 @@ static GstStaticPadTemplate video_src_template =
         "video/x-flash-screen; "
         "video/x-vp6-flash; " "video/x-vp6-alpha; "
         "video/x-h264, stream-format=avc; "
-        "video/x-h265, stream-format=hvc1;")
+        "video/x-h265, stream-format={hvc1,hev1};")
     );
 
 GST_DEBUG_CATEGORY_STATIC (flvdemux_debug);
@@ -1356,7 +1356,7 @@ gst_flv_demux_video_negotiate (GstFlvDemux * demux, guint32 codec_tag)
       }
       caps =
           gst_caps_new_simple ("video/x-h265", "stream-format", G_TYPE_STRING,
-          "hvc1", NULL);
+          "hev1", NULL);
       break;
     case 9:
       caps =
